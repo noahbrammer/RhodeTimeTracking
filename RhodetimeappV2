@@ -1,0 +1,62 @@
+const Trello = require('trello');
+
+const Trello = require('trello');
+const trello = new Trello('4423b0c1e526ff938ed6cc558e702022', '1f28bc449da75db421f725a1f6aa1f0d7223865b751202366639d1c0cd0ce42c');
+
+trello.get(`/1/boards/${boardId}`, (err, board) => {
+  if (err) {
+    console.error(err);
+    return;
+  }
+
+  const cards = board.cards;
+
+  const timerButton = {
+    text: 'Start Timer',
+    callback: function (t) {
+      const startTime = Date.now();
+      t.set('card', 'shared', 'startTime', startTime);
+      t.set('card', 'shared', 'timerRunning', true);
+      t.set('card', 'button', 'Stop Timer', 'Stop Timer', true);
+    },
+    condition: 'edit'
+  };
+
+  const stopTimerButton = {
+    text: 'Stop Timer',
+    callback: function (t) {
+      const cardId = t.getContext().card;
+      const pluginData = t.getContext().plugins['trello-time-tracking'];
+      const startTime = pluginData.startTime;
+      const totalTime = pluginData.totalTime;
+      const elapsedTime = Date.now() - startTime;
+      const newTotalTime = totalTime + elapsedTime;
+
+      t.set('card', 'shared', 'totalTime', newTotalTime);
+      t.set('card', 'shared', 'timerRunning', false);
+      t.set('card', 'button', 'Start Timer', 'Start Timer', true);
+      t.post(`/1/cards/${cardId}/actions/comments`, 
+        { text: `Time Spent: ${newTotalTime}` });
+      t.put(`/1/cards/${cardId}/pluginData`, {
+        value: {
+          startTime: null,
+          totalTime: newTotalTime
+        },
+        key: 'trello-time-tracking'
+      });
+    },
+    condition: 'edit'
+  };
+
+  cards.forEach(card => {
+    trello.post(`/1/cards/${card.id}/actions/comments`, { text: 'Time Spent: 0' });
+    trello.put(`/1/cards/${card.id}/pluginData`, {
+      value: {
+        startTime: null,
+        totalTime: 0
+      },
+      key: 'trello-time-tracking'
+    });
+    trello.post(`/1/cards/${card.id}/buttons`, timerButton);
+  });
+});
